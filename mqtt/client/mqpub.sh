@@ -14,6 +14,9 @@ log "Publishing to $mqtthost with topic $topic"
 REFRESHCOUNTER=$refresh
 FASTUPDATE=0
 
+SLOWUPDATECOUNTER=0
+SLOWUPDATENUMBER=6
+
 export relay
 export power
 export energy
@@ -21,35 +24,36 @@ export voltage
 export lock
 export current
 export pf
+export stat
 
 $BIN_PATH/client/mqpub-static.sh
-while sleep 1; 
+while sleep $refresh; 
 do 
     # refresh logic: either we need fast updates, or we count down until it's time
-    TMPFASTUPDATE=`cat $tmpfile`
+    #TMPFASTUPDATE=`cat $tmpfile`
     #echo "TMPFILE = " $TMPFASTUPDATE
-    if [ -n "${TMPFASTUPDATE}" ]
-    then
-        FASTUPDATE=$TMPFASTUPDATE
-        : > $tmpfile
-    fi
+    #if [ -n "${TMPFASTUPDATE}" ]
+    #then
+    #    FASTUPDATE=$TMPFASTUPDATE
+    #    : > $tmpfile
+    #fi
 
-    if [ $FASTUPDATE -ne 0 ]
-    then
+    #if [ $FASTUPDATE -ne 0 ]
+    #then
         # fast update required, we do updates every second until the requested number of fast updates is done
-        FASTUPDATE=$((FASTUPDATE-1))
-    else
+    #    FASTUPDATE=$((FASTUPDATE-1))
+    #else
         # normal updates, decrement refresh counter until it is time
-        if [ $REFRESHCOUNTER -ne 0 ]
-        then
+    #    if [ $REFRESHCOUNTER -ne 0 ]
+    #    then
             # not yet, keep counting
-            REFRESHCOUNTER=$((REFRESHCOUNTER-1))
-            continue
-        else
-            # time to update
-            REFRESHCOUNTER=$refresh
-        fi
-    fi
+    #        REFRESHCOUNTER=$((REFRESHCOUNTER-1))
+    #        continue
+    #    else
+    #        # time to update
+    #        REFRESHCOUNTER=$refresh
+    #    fi
+    #fi
 
     led_freq=`cat /proc/led/freq| awk '{ print $1 }'`
     $PUBBIN -h $mqtthost $auth -t $topic/led/freq -m "$led_freq" -r
@@ -87,9 +91,8 @@ do
         # energy consumption 
         for i in $(seq $PORTS)
         do
-            energy_val=`cat /proc/power/cf_count$((i))`
-            energy_val=$(awk -vn1="$energy_val" -vn2="0.3125" 'BEGIN{print n1*n2}')
-            energy_val=`printf "%.2f" $energy_val`
+            energy_val=`cat /var/etc/persistent/data/$(date +"%Y-%m:")$((i))`
+            energy_val=$(awk -vn1="$energy_val" -vn2="0.0003125" 'BEGIN{print n1*n2}')
             $PUBBIN -h $mqtthost $auth -t $topic/port$i/energy -m "$energy_val" -r
         done
     fi
@@ -136,4 +139,21 @@ do
             $PUBBIN -h $mqtthost $auth -t $topic/port$i/pf -m "$pf_val" -r
         done
     fi
+
+    if [ $stat -eq 1 ] && [ $SLOWUPDATECOUNTER -le 0 ]
+    then
+        LOAD1=`awk '{print $1}' /proc/loadavg`
+        LOAD5=`awk '{print $2}' /proc/loadavg`
+        LOAD15=`awk '{print $3}' /proc/loadavg`
+        $PUBBIN -h $mqtthost $auth -t $topic/stats/load1 -m "$LOAD1" -r
+        $PUBBIN -h $mqtthost $auth -t $topic/stats/load5 -m "$LOAD5" -r
+        $PUBBIN -h $mqtthost $auth -t $topic/stats/load15 -m "$LOAD15" -r
+
+        UPTIME=`awk '{print $1}' /proc/uptime`
+        $PUBBIN -h $mqtthost $auth -t $topic/stats/uptime -m "$UPTIME" -r
+
+        SLOWUPDATECOUNTER=SLOWUPDATENUMBER
+    fi
+    SLOWUPDATECOUNTER=$((SLOWUPDATECOUNTER-1))
+
 done
