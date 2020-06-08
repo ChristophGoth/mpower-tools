@@ -50,4 +50,4 @@ export PORTS=`cat /etc/board.inc | grep board_shortname | sed -e 's/.*\([0-9]\).
 log "starting pub and sub scripts"
 $BIN_PATH/client/mqpub.sh &
 $BIN_PATH/client/mqsub.sh &
-$BIN_PATH/client/mqsub-led.sh &
+# $BIN_PATH/client/mqsub-led.sh &

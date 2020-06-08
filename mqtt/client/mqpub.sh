@@ -25,6 +25,7 @@ export lock
 export current
 export pf
 export stat
+export led
 
 $BIN_PATH/client/mqpub-static.sh
 while sleep $refresh; 
@@ -55,11 +56,14 @@ do
     #    fi
     #fi
 
-    led_freq=`cat /proc/led/freq| awk '{ print $1 }'`
-    $PUBBIN -h $mqtthost $auth -t $topic/led/freq -m "$led_freq" -r
+    if [ $relay -eq 1 ] && [ $SLOWUPDATECOUNTER -le 0 ]
+    then
+        led_freq=`awk '{ print $1 }' /proc/led/freq`
+        $PUBBIN -h $mqtthost $auth -t $topic/led/freq -m "$led_freq" -r
 
-    led_status=`cat /proc/led/status| awk '{ print $1 }'`
-    $PUBBIN -h $mqtthost $auth -t $topic/led/status -m "$led_status" -r
+        led_status=`awk '{ print $1 }' /proc/led/status`
+        $PUBBIN -h $mqtthost $auth -t $topic/led/status -m "$led_status" -r
+    fi
 
     if [ $relay -eq 1 ]
     then
@@ -86,7 +90,7 @@ do
         done
     fi
 
-    if [ $energy -eq 1 ]
+    if [ $energy -eq 1 ] && [ $SLOWUPDATECOUNTER -le 0 ]
     then
         # energy consumption 
         for i in $(seq $PORTS)
@@ -108,7 +112,7 @@ do
         done
     fi
     
-    if [ $lock -eq 1 ]
+    if [ $lock -eq 1 ] && [ $SLOWUPDATECOUNTER -le 0 ]
     then
         # lock
         for i in $(seq $PORTS)
@@ -152,8 +156,15 @@ do
         UPTIME=`awk '{print $1}' /proc/uptime`
         $PUBBIN -h $mqtthost $auth -t $topic/stats/uptime -m "$UPTIME" -r
 
-        SLOWUPDATECOUNTER=SLOWUPDATENUMBER
+        
     fi
-    SLOWUPDATECOUNTER=$((SLOWUPDATECOUNTER-1))
+
+    if [ $SLOWUPDATECOUNTER -le 0 ]
+    then
+        SLOWUPDATECOUNTER=$((SLOWUPDATENUMBER))
+    else
+        SLOWUPDATECOUNTER=$((SLOWUPDATECOUNTER-1))
+    fi
+    
 
 done

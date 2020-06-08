@@ -15,7 +15,7 @@ echo 0 > /proc/led/freq
 
 log "MQTT listening..."
 $BIN_PATH/mosquitto_sub -I $clientID -h $mqtthost $auth -v -t $topic/+/+/set \
---will-topic $topic/\$online --will-retain --will-qos 1 --will-payload 'false' \
+--will-topic $topic/online --will-retain --will-qos 1 --will-payload 'false' \
 | while read line; do
     rxtopic=`echo $line| cut -d" " -f1`
     inputVal=`echo $line| cut -d" " -f2`
@@ -42,7 +42,7 @@ $BIN_PATH/mosquitto_sub -I $clientID -h $mqtthost $auth -v -t $topic/+/+/set \
         fi
         log "MQTT request received. $property control for port" $port "with value" $inputVal
         `echo $val > /proc/power/$property$port`
-        echo 5 > $tmpfile
+        #echo 5 > $tmpfile
         
         # led handling for relay_off
         if [ -n "$relay_off" ]
