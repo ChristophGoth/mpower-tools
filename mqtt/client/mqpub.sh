@@ -14,8 +14,8 @@ log "Publishing to $mqtthost with topic $topic"
 REFRESHCOUNTER=$refresh
 FASTUPDATE=0
 
-SLOWUPDATECOUNTER=0
-SLOWUPDATENUMBER=6
+#SLOWUPDATECOUNTER=0
+#SLOWUPDATENUMBER=6
 
 export relay
 export power
@@ -28,35 +28,35 @@ export stat
 export led
 
 $BIN_PATH/client/mqpub-static.sh
-while sleep $refresh; 
-do 
+while sleep 1;
+do
     # refresh logic: either we need fast updates, or we count down until it's time
-    #TMPFASTUPDATE=`cat $tmpfile`
-    #echo "TMPFILE = " $TMPFASTUPDATE
-    #if [ -n "${TMPFASTUPDATE}" ]
-    #then
-    #    FASTUPDATE=$TMPFASTUPDATE
-    #    : > $tmpfile
-    #fi
+    TMPFASTUPDATE=`cat $tmpfile`
+    echo "TMPFILE = " $TMPFASTUPDATE
+    if [ -n "${TMPFASTUPDATE}" ]
+    then
+        FASTUPDATE=$TMPFASTUPDATE
+        : > $tmpfile
+    fi
 
-    #if [ $FASTUPDATE -ne 0 ]
-    #then
+    if [ $FASTUPDATE -ne 0 ]
+    then
         # fast update required, we do updates every second until the requested number of fast updates is done
-    #    FASTUPDATE=$((FASTUPDATE-1))
-    #else
+        FASTUPDATE=$((FASTUPDATE-1))
+    else
         # normal updates, decrement refresh counter until it is time
-    #    if [ $REFRESHCOUNTER -ne 0 ]
-    #    then
+        if [ $REFRESHCOUNTER -ne 0 ]
+        then
             # not yet, keep counting
-    #        REFRESHCOUNTER=$((REFRESHCOUNTER-1))
-    #        continue
-    #    else
-    #        # time to update
-    #        REFRESHCOUNTER=$refresh
-    #    fi
-    #fi
+            REFRESHCOUNTER=$((REFRESHCOUNTER-1))
+            continue
+        else
+            # time to update
+            REFRESHCOUNTER=$refresh
+        fi
+    fi
 
-    if [ $relay -eq 1 ] && [ $SLOWUPDATECOUNTER -le 0 ]
+    if [ $relay -eq 1 ]
     then
         led_freq=`awk '{ print $1 }' /proc/led/freq`
         $PUBBIN -h $mqtthost $auth -t $topic/led/freq -m "$led_freq" -r
@@ -78,7 +78,7 @@ do
             $PUBBIN -h $mqtthost $auth -t $topic/port$i/relay -m "$relay_val" -r
         done
     fi
-    
+
     if [ $power -eq 1 ]
     then
         # current power
@@ -90,20 +90,46 @@ do
         done
     fi
 
-    if [ $energy -eq 1 ] && [ $SLOWUPDATECOUNTER -le 0 ]
+#    if [ $energy -eq 1 ]
+#    then
+#        # energy consumption
+#        for i in $(seq $PORTS)
+#        do
+#            energy_val=`cat /var/etc/persistent/data/$(date +"%Y-%m:")$((i))`
+#            energy_val=$(awk -vn1="$energy_val" -vn2="0.0003125" 'BEGIN{print n1*n2}')
+#            $PUBBIN -h $mqtthost $auth -t $topic/port$i/energy -m "$energy_val" -r
+#        done
+#    fi
+
+#    if [ $energy -eq 1 ]
+#    then
+#        # energy consumption
+#        for i in $(seq $PORTS)
+#        do
+#            energy_val=`cat /var/etc/persistent/data/$(date +"%Y-%m:")$((i))`
+#            if [ $energy_val -gt 1 ]
+#            then
+#                energy_val=$(awk -vn1="$energy_val" -vn2="0.0003125" 'BEGIN{print n1*n2}')
+#                $PUBBIN -h $mqtthost $auth -t $topic/port$i/energy -m "$energy_val" -r
+#            fi
+#        done
+#    fi
+
+    if [ $energy -eq 1 ]
     then
-        # energy consumption 
+        # energy consumption
         for i in $(seq $PORTS)
         do
-            energy_val=`cat /var/etc/persistent/data/$(date +"%Y-%m:")$((i))`
-            energy_val=$(awk -vn1="$energy_val" -vn2="0.0003125" 'BEGIN{print n1*n2}')
+            energy_val=`cat /proc/power/cf_count$((i))`
+            energy_val=$(awk -vn1="$energy_val" -vn2="0.3125" 'BEGIN{print n1*n2}')
+            energy_val=`printf "%.3f" $energy_val`
             $PUBBIN -h $mqtthost $auth -t $topic/port$i/energy -m "$energy_val" -r
         done
     fi
-    
+
     if [ $voltage -eq 1 ]
     then
-        # energy consumption 
+        # current voltage
         for i in $(seq $PORTS)
         do
             voltage_val=`cat /proc/power/v_rms$((i))`
@@ -111,8 +137,8 @@ do
             $PUBBIN -h $mqtthost $auth -t $topic/port$i/voltage -m "$voltage_val" -r
         done
     fi
-    
-    if [ $lock -eq 1 ] && [ $SLOWUPDATECOUNTER -le 0 ]
+
+    if [ $lock -eq 1 ]
     then
         # lock
         for i in $(seq $PORTS)
@@ -144,7 +170,7 @@ do
         done
     fi
 
-    if [ $stat -eq 1 ] && [ $SLOWUPDATECOUNTER -le 0 ]
+    if [ $stat -eq 1 ]
     then
         LOAD1=`awk '{print $1}' /proc/loadavg`
         LOAD5=`awk '{print $2}' /proc/loadavg`
@@ -156,15 +182,7 @@ do
         UPTIME=`awk '{print $1}' /proc/uptime`
         $PUBBIN -h $mqtthost $auth -t $topic/stats/uptime -m "$UPTIME" -r
 
-        
-    fi
 
-    if [ $SLOWUPDATECOUNTER -le 0 ]
-    then
-        SLOWUPDATECOUNTER=$((SLOWUPDATENUMBER))
-    else
-        SLOWUPDATECOUNTER=$((SLOWUPDATECOUNTER-1))
     fi
-    
 
 done
